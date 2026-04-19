@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Карта улиц и достопримечательностей Павлодара</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <!-- Подключение плагина геокодера -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css"/>
+
+    <style>
+        body{
+            margin:0;
+            font-family:Arial, sans-serif;
+            display:flex;
+        }
+
+        #map{
+            height:100vh;
+            flex:1;
+        }
+
+        #infoPanel{
+            width:400px;
+            background:white;
+            box-shadow:-3px 0 10px rgba(0,0,0,0.15);
+            padding:20px;
+            display:flex;
+            flex-direction:column;
+            gap:10px;
+            overflow-y:auto;
+            max-height:100vh;
+        }
+
+        #streetName{
+            font-size:22px;
+            font-weight:bold;
+            color:#333;
+        }
+
+        #streetImage{
+            width:100%;
+            height:220px;
+            object-fit:cover;
+            border-radius:8px;
+            margin:10px 0;
+        }
+
+        #streetContent{
+            color:#444;
+            line-height:1.6;
+            font-size:14px;
+        }
+
+        .leaflet-interactive{
+            cursor:pointer;
+        }
+
+        .custom-marker{
+            background:#e74c3c;
+            border:3px solid white;
+            border-radius:50%;
+            width:24px;
+            height:24px;
+            box-shadow:0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        .museum-marker{
+            background:#9b59b6;
+        }
+
+        .mosque-marker{
+            background:#27ae60;
+        }
+
+        .church-marker{
+            background:#f39c12;
+        }
+
+        .park-marker{
+            background:#2ecc71;
+        }
+
+        .monument-marker{
+            background:#95a5a6;
+        }
+
+        .legend{
+            position:absolute;
+            bottom:20px;
+            left:20px;
+            background:white;
+            padding:15px;
+            border-radius:8px;
+            box-shadow:0 2px 10px rgba(0,0,0,0.2);
+            z-index:1000;
+            font-size:12px;
+        }
+
+        .legend-item{
+            display:flex;
+            align-items:center;
+            margin:5px 0;
+        }
+
+        .legend-color{
+            width:16px;
+            height:16px;
+            border-radius:50%;
+            margin-right:8px;
+            border:2px solid white;
+            box-shadow:0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        h3{
+            margin:15px 0 10px 0;
+            color:#2c3e50;
+            border-bottom:2px solid #3498db;
+            padding-bottom:5px;
+        }
+
+        /* Стили для панели поиска улиц */
+        .street-search-panel {
+            position: absolute;
+            top: 10px;
+            left: 50px;
+            background: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .street-search-panel input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 250px;
+            font-size: 14px;
+        }
+
+        .street-search-panel button {
+            padding: 8px 16px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .street-search-panel button:hover {
+            background: #2980b9;
+        }
+
+        .search-results {
+            position: absolute;
+            top: 55px;
+            left: 50px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            max-height: 300px;
+            overflow-y: auto;
+            width: 320px;
+            display: none;
+        }
+
+        .search-result-item {
+            padding: 10px 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .search-result-item:hover {
+            background: #f5f5f5;
+        }
+
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+
+        .no-results {
+            padding: 15px;
+            color: #666;
+            text-align: center;
+        }
+
+        /* === ГЕОЛОКАЦИЯ КАК В 2ГИС === */
+        .geolocate-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 44px;
+            height: 44px;
+            background: white;
+            border: none;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+            cursor: pointer;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            padding: 0;
+        }
+
+        .geolocate-btn:hover {
+            background: #f5f5f5;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .geolocate-btn:active {
+            transform: scale(0.95);
+        }
+
+        .geolocate-btn.active {
+            background: #e3f2fd;
+        }
+
+        .geolocate-btn svg {
+            width: 22px;
+            height: 22px;
+            fill: #1a73e8;
+        }
+
+        .geolocate-btn.spinning svg {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* Маркер местоположения — синий круг с пульсацией как в 2GIS */
+        .location-marker {
+            width: 16px;
+            height: 16px;
+            background: #1a73e8;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+            position: relative;
+        }
+
+        .location-marker::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 16px;
+            height: 16px;
+            background: rgba(26, 115, 232, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: pulse-ring 2s ease-out infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% {
+                width: 16px;
+                height: 16px;
+                opacity: 0.6;
+            }
+            100% {
+                width: 50px;
+                height: 50px;
+                opacity: 0;
+            }
+        }
+
+        /* Круг точности */
+        .accuracy-circle {
+            stroke: #1a73e8;
+            stroke-width: 1;
+            fill: rgba(26, 115, 232, 0.08);
+        }
+
+        /* Панель статуса геолокации */
+        .geo-status {
+            position: absolute;
+            bottom: 75px;
+            right: 20px;
+            background: white;
+            padding: 8px 14px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            z-index: 1000;
+            font-size: 13px;
+            color: #333;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            max-width: 250px;
+        }
+
+        .geo-status.visible {
+            display: flex;
+        }
+
+        .geo-status-dot {
+            width: 8px;
+            height: 8px;
+            background: #4caf50;
+            border-radius: 50%;
+            flex-shrink: 0;
+            animation: blink 2s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .geo-status.error {
+            color: #c62828;
+        }
+
+        .geo-status.error .geo-status-dot {
+            background: #c62828;
+            animation: none;
+        }
+    </style>
+<base target="_blank">
+<base target="_blank">
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<!-- Панель поиска улиц -->
+<div class="street-search-panel">
+    <input type="text" id="streetSearchInput" placeholder="Поиск улицы Павлодара..." />
+    <button onclick="searchStreet()">Найти</button>
+</div>
+
+<div class="search-results" id="searchResults"></div>
+
+<!-- Кнопка геолокации как в 2GIS -->
+<button class="geolocate-btn" id="geolocateBtn" onclick="toggleGeolocation()" title="Определить мое местоположение">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+    </svg>
+</button>
+
+<!-- Статус геолокации -->
+<div class="geo-status" id="geoStatus">
+    <div class="geo-status-dot"></div>
+    <span id="geoStatusText">Определяем местоположение...</span>
+</div>
+
+<div class="legend">
+    <strong>Метки:</strong>
+    <div class="legend-item"><div class="legend-color" style="background:#e74c3c;"></div>Достопримечательности</div>
+    <div class="legend-item"><div class="legend-color" style="background:#9b59b6;"></div>Музеи</div>
+    <div class="legend-item"><div class="legend-color" style="background:#27ae60;"></div>Мечети</div>
+    <div class="legend-item"><div class="legend-color" style="background:#f39c12;"></div>Церкви</div>
+    <div class="legend-item"><div class="legend-color" style="background:#2ecc71;"></div>Парки</div>
+    <div class="legend-item"><div class="legend-color" style="background:#95a5a6;"></div>Памятники</div>
+</div>
+
+<div id="infoPanel">
+    <div id="streetName">Выберите улицу или достопримечательность</div>
+    <img id="streetImage" style="display:none;" />
+    <div id="streetContent">
+        Нажмите на улицу или метку на карте, чтобы увидеть информацию.
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Подключение плагина геокодера -->
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+<script>
+    // карта
+    var map = L.map('map').setView([52.287,76.967],13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+        attribution:'© OpenStreetMap'
+    }).addTo(map);
+
+    // Добавление геокодера для поиска мест (Nominatim)
+    var geocoder = L.Control.geocoder({
+        position: 'topright',
+        collapsed: false,
+        placeholder: 'Поиск места...',
+        defaultMarkGeocode: true,
+        geocoder: L.Control.Geocoder.nominatim({
+            geocodingQueryParams: {
+                viewbox: '76.88,52.22,77.05,52.35', // Ограничение поиска Павлодаром
+                bounded: 1,
+                countrycodes: 'kz' // Только Казахстан
+            }
+        })
+    }).addTo(map);
+
+    // === ГЕОЛОКАЦИЯ КАК В 2ГИС ===
+    var geoWatchId = null;
+    var locationMarker = null;
+    var accuracyCircle = null;
+    var isGeoActive = false;
+
+    function showGeoStatus(text, isError) {
+        var statusEl = document.getElementById('geoStatus');
+        var textEl = document.getElementById('geoStatusText');
+        textEl.textContent = text;
+        statusEl.classList.add('visible');
+        if (isError) {
+            statusEl.classList.add('error');
+        } else {
+            statusEl.classList.remove('error');
+        }
+        // Автоскрытие через 4 секунды если не ошибка
+        if (!isError) {
+            setTimeout(function() {
+                statusEl.classList.remove('visible');
+            }, 4000);
+        }
+    }
+
+    function hideGeoStatus() {
+        document.getElementById('geoStatus').classList.remove('visible');
+    }
+
+    function clearLocationLayers() {
+        if (locationMarker) {
+            map.removeLayer(locationMarker);
+            locationMarker = null;
+        }
+        if (accuracyCircle) {
+            map.removeLayer(accuracyCircle);
+            accuracyCircle = null;
+        }
+    }
+
+    function onLocationFound(position) {
+        var btn = document.getElementById('geolocateBtn');
+        btn.classList.remove('spinning');
+        btn.classList.add('active');
+
+        var lat = position.coords.latitude;
+        var lng = position.coords.longitude;
+        var accuracy = position.coords.accuracy;
+
+        // Удаляем старые слои
+        clearLocationLayers();
+
+        // Создаем кастомную иконку как в 2GIS
+        var locationIcon = L.divIcon({
+            className: 'location-marker',
+            iconSize: [16, 16],
+            iconAnchor: [8, 8]
+        });
+
+        // Маркер местоположения
+        locationMarker = L.marker([lat, lng], { icon: locationIcon }).addTo(map);
+
+        // Круг точности
+        accuracyCircle = L.circle([lat, lng], {
+            radius: accuracy,
+            className: 'accuracy-circle',
+            stroke: true,
+            color: '#1a73e8',
+            weight: 1,
+            fill: true,
+            fillColor: '#1a73e8',
+            fillOpacity: 0.08
+        }).addTo(map);
+
+        // Центрируем карту с плавной анимацией
+        map.flyTo([lat, lng], 16, {
+            duration: 1.2,
+            easeLinearity: 0.25
+        });
+
+        var accuracyText = accuracy < 1000 ? Math.round(accuracy) + ' м' : (accuracy / 1000).toFixed(1) + ' км';
+        showGeoStatus('Местоположение определено (±' + accuracyText + ')');
+    }
+
+    function onLocationError(error) {
+        var btn = document.getElementById('geolocateBtn');
+        btn.classList.remove('spinning', 'active');
+
+        var message = 'Не удалось определить местоположение';
+        switch(error.code) {
+            case error.PERMISSION_DENIED:
+                message = 'Доступ к геолокации запрещен. Разрешите доступ в настройках браузера.';
+                break;
+            case error.POSITION_UNAVAILABLE:
+                message = 'Информация о местоположении недоступна.';
+                break;
+            case error.TIMEOUT:
+                message = 'Время ожидания геолокации истекло.';
+                break;
+        }
+        showGeoStatus(message, true);
+        stopGeolocation();
+    }
+
+    function startGeolocation() {
+        if (!navigator.geolocation) {
+            showGeoStatus('Геолокация не поддерживается вашим браузером', true);
+            return;
+        }
+
+        var btn = document.getElementById('geolocateBtn');
+        btn.classList.add('spinning');
+        showGeoStatus('Определяем ваше местоположение...');
+
+        // Сначала одноразовое определение для быстрого отклика
+        navigator.geolocation.getCurrentPosition(
+            onLocationFound,
+            onLocationError,
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            }
+        );
+
+        // Затем начинаем слежение за перемещением
+        geoWatchId = navigator.geolocation.watchPosition(
+            onLocationFound,
+            onLocationError,
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 10000
+            }
+        );
+
+        isGeoActive = true;
+    }
+
+    function stopGeolocation() {
+        if (geoWatchId !== null) {
+            navigator.geolocation.clearWatch(geoWatchId);
+            geoWatchId = null;
+        }
+        clearLocationLayers();
+        isGeoActive = false;
+
+        var btn = document.getElementById('geolocateBtn');
+        btn.classList.remove('active', 'spinning');
+        hideGeoStatus();
+    }
+
+    function toggleGeolocation() {
+        if (isGeoActive) {
+            stopGeolocation();
+        } else {
+            startGeolocation();
+        }
+    }
+
+    // база информации об улицах
+    var streetInfo={
+        "Лермонтов көшесі":{
+            year:"1950",
+            history:"Названа в честь поэта Михаила Лермонтова. Раньше называлась Тюремный переулок, была переименована в 1950 году.",
+            description:"Одна из центральных улиц города Павлодара.",
+            image:"https://pavlodarnews.kz/uploads/images/202408/image_750x_66c50bc21953e.jpg"
+        },
+        "Нұрсұлтан Назарбаев даңғылы":{
+            year:"2019",
+            history:"Главная транспортная магистраль. Раньше называлась улица Кутузова, была переименована в 2019 году.",
+            description:"Проходит через значительную часть города. Названа в честь первого президента.",
+            image:"https://img-fotki.yandex.ru/get/4405/15867844.11c/0_15df49_7ece5a2a_XL.jpg"
+        },
+        "Естай көшесі":{
+            year:"1980",
+            history:"Главная транспортная магистраль. Названа в честь казахского поэта и композитора Естай Беркимбаев. Раньше называлась улицей Горького.",
+            description:"Проходит через значительную часть города.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532914832_708387704_23_1682309798&size=500%2C240&azimuth=-52.2&tilt=10&api_key=maps&signature=YbemqYD3qh51ewE8lWYn0QgRyVZ36Ow6NYfmVdW2bus="
+        },
+        "улица Камзина":{
+            year:"1944",
+            history:"Началась активная застройка района: появились панельные жилые дома и дворы.",
+            description:"Названа в честь Канаш Камзина.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532962780_708450797_23_1682479462&size=500%2C240&azimuth=-101.6&tilt=10&api_key=maps&signature=wDdN3Te-T9IIkuYoFrk3z2ugaYVnqvTrg3WGaScJNTk="
+        },
+        "Толстой көшесі":{
+            year:"1898",
+            history:"Улица названа в честь русского писателя Льва Толстого. Проходила через новые кварталы, соединяя центр с окраинами.",
+            description:"В честь автора романов 'Война и мир' и 'Анна Каренина'.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532916317_708473875_23_1682136187&size=500%2C240&azimuth=12.7&tilt=10&api_key=maps&signature=LDgmYZTIpk3Os0dByQxrSQr5_FpH3u5EiOk8Of77lMw="
+        },
+        "Бекмаханов көшесі":{
+            year:"2020",
+            history:"Улица появилась в советский период. В 2019–2020 годах переименована в Бекмаханова в честь историка.",
+            description:"Раньше называлась: улица Кирова, улица Парковая.",
+            image:"https://core-pht-proxy.maps.yandex.ru/v1/photos/download?photo_id=bbSnXdE3Npc9OvJdKZv&image_size=M"
+        },
+        "улица Катаева":{
+            year:"1950",
+            history:"Улица названа в честь писателя Валентина Катаева.",
+            description:"Появилась в середине XX века при расширении города.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532903235_708483969_23_1682590993&size=500%2C240&azimuth=81.9&tilt=10&api_key=maps&signature=CZx_9nANw2H-IVSvFiX3y5v1_xW8-aCFUN-7W0erYyc="
+        },
+        "улица Павлова":{
+            year:"1956",
+            history:"Улица названа в честь учёного-физиолога Ивана Петровича Павлова.",
+            description:"Исследования Павлова о работе мозга и рефлексах стали важными для науки.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532918178_708324621_23_1682412010&size=500%2C240&azimuth=73.6&tilt=10&api_key=maps&signature=VIHFYiroOMr1zSbmJ71pGKkKNPbOAMmbYu0oVruXqiw="
+        },
+        "Шевченко көшесі":{
+            year:"1940",
+            history:"Улица названа в честь украинского поэта и художника Тараса Шевченко.",
+            description:"Является частью истории Павлодара, показывает уважение к культуре.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532916508_708437036_23_1682135884&size=500%2C240&azimuth=-177.7&tilt=10&api_key=maps&signature=EYBqT3vgHItaG4mVsOmncsuSZeAOE6yDF9NImKNdmWI="
+        },
+        "Ломов көшесі":{
+            year:"1960",
+            history:"Раньше называлась улица Свердлова. В 1994 году переименована.",
+            description:"Одна из длинных и известных улиц Павлодара, проходит через несколько районов.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532845563_708590499_23_1682580995&size=500%2C240&azimuth=-16.7&tilt=10&api_key=maps&signature=0ZG5vlPkHK8xcaSvN5SaYfU0M050pZO_GLxTDE7JOms="
+        },
+        "Торговая улица":{
+            year:"2000",
+            history:"Современная улица, появившаяся с развитием бизнеса и торговли.",
+            description:"Торговая улица города.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532620871_708162420_23_1682153420&size=500%2C240&azimuth=55&tilt=10&api_key=maps&signature=4a_xfNrDYaxFY382eG4og0myCxCb0UBcGoZPvpWWJBI="
+        },
+        "Торайғыров көшесі":{
+            year:"1960",
+            history:"Улица получила название в честь казахского поэта Султанмахмут Торайгыров. Старое название: Куйбышева.",
+            description:"Переименование связано с почтением памяти поэта.",
+            image:"https://avatars.mds.yandex.net/get-altay/10228783/2a00000194f68592a21840dc1d46b6b4b423/XXXL"
+        },
+        "Айманов көшесі":{
+            year:"1984",
+            history:"Названа в честь Народного артиста СССР, кинорежиссёра Шакена Айманова.",
+            description:"Улица названа в честь известного деятеля культуры.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532617334_708254523_23_1682152269&size=500%2C240&azimuth=-145.8&tilt=10&api_key=maps&signature=k1udDcBBzWejKynlGvf8ij1C_XjLwwMcLH_8oUekCHk="
+        },
+        "Космонавтов":{
+            year:"1970",
+            history:"В это время в СССР активно развивалась космонавтика.",
+            description:"Связана с событием — первый полёт человека в космос.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532749255_708100559_23_1682593832&size=500%2C240&azimuth=-90.3&tilt=10&api_key=maps&signature=ZckxggUUfcY9TnNoRYchbVR3zTtTEZC4sge5mfZP9BI="
+        },
+        "Бөкейхан көшесі":{
+            year:"1990",
+            history:"Названа в честь Алихана Бокейханова — известного казахского политика.",
+            description:"Название связано с историей и культурой Казахстана.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532712336_708597548_23_1682490831&size=500%2C240&azimuth=-161.6&tilt=10&api_key=maps&signature=Q3GuFnFtk0QAIz-t0gy9vQ6MEMXvENLvu9rkuzo65tE="
+        },
+        "улица Жаяу-Мусы":{
+            year:"1991",
+            history:"Названа в честь казахского акына и композитора Жаяу Муса Байжанулы.",
+            description:"Расположена в жилом районе города.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532878647_708734403_23_1682497554&size=500%2C240&azimuth=68.6&tilt=10&api_key=maps&signature=QoZuJXYGdtr29MqujvWZGmO-suDIyjw-rQq_ciEUgFM="
+        },
+        "Академик Сәтбаев көшесі":{
+            year:"1991",
+            history:"Улица названа в честь учёного Каныша Сатпаева.",
+            description:"Основатель казахстанской школы геологии, первый президент Академии наук Казахстана.",
+            image:"https://core-pht-proxy.maps.yandex.ru/v1/photos/download?photo_id=5IYV3gfYTRLrxdGmYq0&image_size=M"
+        },
+        "улица Академика Чокина":{
+            year:"1991",
+            history:"Шафик Чокин внёс большой вклад в развитие энергетики Казахстана.",
+            description:"Улица в жилой части города.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532776158_708556227_23_1682488714&size=500%2C240&azimuth=-28.3&tilt=10&api_key=maps&signature=DHqGqYzFNpoirpFm9AZ5LWdYuXEW_7OvdmjzvPUKrVU="
+        },
+        "Кривенко көшесі":{
+            year:"1994",
+            history:"Название относится к более раннему периоду.",
+            description:"Улица в жилом районе города.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532811961_708385807_23_1682313629&size=500%2C240&azimuth=180&tilt=10&api_key=maps&signature=ZCbRpJesK19QNDEMgCHwnxrzfqJwDEltsCg1_lga2Wo="
+        },
+        "Астана көшесі":{
+            year:"1997",
+            history:"Название связано с переносом столицы в Астану в 1997 году.",
+            description:"Улица названа в честь столицы Казахстана.",
+            image:"https://core-pht-proxy.maps.yandex.ru/v1/photos/download?photo_id=u9UBV3EjhQ0sQiaA9UGTVw&image_size=M"
+        },
+        "улица Максима Горького":{
+            year:"1861",
+            history:"Отражает советскую традицию называть улицы в честь писателей.",
+            description:"Названа в честь русского советского писателя.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532780107_708518461_23_1682489276&size=500%2C240&azimuth=40.7&tilt=1&api_key=maps&signature=eMuj2EHMbLBNeKlo3tydIqVDDYjKio71xrhVwuDF8m4="
+        },
+        "Мәшһүр Жүсіп көшесі":{
+            year:"2020",
+            history:"Мәшһүр Жүсіп — казахский поэт, философ и общественный деятель.",
+            description:"Улица в жилом районе города.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532788011_708406165_23_1682313998&size=500%2C240&azimuth=-5.1&tilt=10&api_key=maps&signature=1rjjtnitQlWBqczeeMsxDBffKrMEktOID3V4RwAo7Uo="
+        },
+        "улица Луначарского":{
+            year:"1863",
+            history:"Связана с советской традицией называть улицы в честь деятелей.",
+            description:"Названа в честь советского государственного деятеля Анатолия Луначарского.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532680631_708478708_23_1682136825&size=500%2C240&azimuth=-77.7&tilt=10&api_key=maps&signature=PU1fUcZmji1Dp-gPyn6uA2D2GaPkb6ef2HRm7GgV1gE="
+        },
+        "Сағадат Нұрмағамбетов көшесі":{
+            year:"2020",
+            history:"Названа в честь первого министра обороны Республики Казахстан.",
+            description:"Улица в жилом районе с объектами инфраструктуры.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532927746_708257393_23_1682413311&size=500%2C240&azimuth=-1.4&tilt=10&api_key=maps&signature=lHnM8YEsy12v_P8qIHfu6JyqcM4mCDqoHjYXUwRESfE="
+        },
+        "Жібек Жолы көшесі":{
+            year:"1990",
+            history:"Улица сформировалась при расширении города.",
+            description:"Название связано с Великим шёлковым путём.",
+            image:"https://i.ytimg.com/vi/KPVziO7gpmU/maxresdefault.jpg?sqp=-oaymwEmCIAKENAF8quKqQMa8AEB-AHUBoAC4AOKAgwIABABGGUgUihSMA8=&amp;rs=AOn4CLB4xKvOzdMd-h2jUpA6gJj86fKHDg"
+        },
+        "улица Амангельды":{
+            year:"1950",
+            history:"Названа в честь Амангельды Иманова — народного героя Казахстана.",
+            description:"Руководитель национально-освободительного восстания 1916 года.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532848105_708673257_23_1682324611&size=500%2C240&azimuth=87.3&tilt=10&api_key=maps&signature=H1zIJ7RMUJfb1ucOxWdqeCsaqOkZwQJByZ0OvmrCy2U="
+        },
+        "улица Майры":{
+            year:"1990",
+            history:"Названа в честь казахской певицы Майры Шамсутдиновой.",
+            description:"Раньше называлась: улица Восточная.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532757057_708729320_23_1682499916&size=500%2C240&azimuth=-80.3&tilt=10&api_key=maps&signature=QUAZB8tZSF3-wfGtNtXqXuYXAik8NcPMega4n-E9QG0="
+        },
+        "Мұқағали Мақатаев көшесі":{
+            year:"1990",
+            history:"Названа в честь казахского поэта Мұқағали Мақатаева.",
+            description:"Раньше называлась: улица Парковая.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532828276_708734413_23_1682499188&size=500%2C240&azimuth=0.4&tilt=10&api_key=maps&signature=tiDPRee63YdO-357SW6ZhxyLgWH0R9H9yIhZ5lZEFZ4="
+        },
+        "Улица Бекхожина":{
+            year:"1990",
+            history:"Названа в честь казахского поэта и писателя Калижана Бекхожина.",
+            description:"Раньше называлась: улица Чапаева.",
+            image:"https://tengrinews.kz/userdata/news/2013/news_243254/thumb_m/photo_104682.jpg"
+        },
+        "Сұрағанов көшесі":{
+            year:"1990",
+            history:"Названа в честь государственного деятеля Сапарғали Сұрағанова.",
+            description:"Раньше называлась: улица Строительная.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532918220_708313122_23_1682649166&size=500%2C240&azimuth=-36.1&tilt=10&api_key=maps&signature=dVqD9AnjQmwvzRxNLlycB-ab4z1BlbRSSD90rGOUjtg="
+        },
+        "улица Теплова":{
+            year:"1950",
+            history:"Названа в честь советского учёного-теплофизика Сергея Теплова.",
+            description:"Улица Теплова — одна из жилых улиц южной части города Павлодара, застроенная преимущественно частными домами и малоэтажными зданиями, с развитой транспортной доступностью и близостью к городским объектам.",
+            image:"https://www.tsn24.ru/upload/resize_cache/iblock/6b9/1200_630_2/yozn8ka5kix0eglhue9lqfozbrdt1kdv.jpg"
+        },
+        "улица Гагарина":{
+            year:"1961",
+            history:"Названа в честь Юрия Гагарина — первого человека в космосе.",
+            description:"Первый полёт состоялся 12 апреля 1961 года.",
+            image:"https://avatars.mds.yandex.net/i?id=66866600fc01e141ee7c670c9c5de75a1b3f6eb1-5877340-images-thumbs&n=13"
+        },
+        "Малайсары батыр көшесі":{
+            year:"1990",
+            history:"Названа в честь казахского батыра XVIII века.",
+            description:"Раньше называлась: улица Суворова.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1533042971_708359233_23_1682394697&size=500%2C240&azimuth=170.2&tilt=10&api_key=maps&signature=LTQVu4SCalvHLa-x5exN5LWaF50dHXmwxJmJRe5Gg5Y="
+        },
+        "Баян батыр көшесі":{
+            year:"1990",
+            history:"Названа в честь казахского батыра XVIII века.",
+            description:"Раньше называлась: улица Мира.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532597123_708129505_23_1682153485&size=500%2C240&azimuth=41.9&tilt=10&api_key=maps&signature=KQpF2H8sFpm6pgCFqmc7Hssx9ElbUMOqr2rU6nNYBS4="
+        },
+        "Олжабай батыр көшесі":{
+            year:"1990",
+            history:"Названа в честь казахского батыра XVIII века.",
+            description:"Раньше называлась: улица Мира.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532779594_708263270_23_1682401316&size=500%2C240&azimuth=48.7&tilt=10&api_key=maps&signature=c6NU9sHUZo1RO0ZADGq1YihZFyi6oom8LskecKtFOmI="
+        },
+        "Жүсіпбек Аймауытұлы көшесі":{
+            year:"1990",
+            history:"Названа в честь казахского писателя и общественного деятеля.",
+            description:"Улица в городе Павлодар.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532930127_708291670_23_1682834451&size=500%2C240&azimuth=106.3&tilt=10&api_key=maps&signature=hkRFU-k4aZpvVkH3XfCG-POg2fBNLR1cub6bHEK1x-Q="
+        },
+        "Путейская улица":{
+            year:"XX век",
+            history:"Название связано с железнодорожной инфраструктурой.",
+            description:"Исторически связана с транспортным сообщением.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532807971_708165670_23_1682655567&size=500%2C240&azimuth=178.6&tilt=10&api_key=maps&signature=sg23P5hGYK46blXgmAqDwfKO8_49M7bcOCZvNjmNw70="
+        },
+        "Ермаков көшесі":{
+            year:"1956",
+            history:"Название связано с транспортной инфраструктурой.",
+            description:"Улица названа в советское время.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532529764_708181202_23_1682511499&size=500%2C240&azimuth=57.3&tilt=10&api_key=maps&signature=hxB3MSb00VIb_pGs1tctupR8b6SVfWz0tKXpwmf-dKU="
+        },
+        "улица Ворушина":{
+            year:"1965",
+            history:"Названа в честь деятеля советского времени.",
+            description:"Раньше называлась: улица академика Сатпаева.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1533006261_708668367_23_1682486839&size=500%2C240&azimuth=-7&tilt=1&api_key=maps&signature=judK9b4nip6DqLKRthxr5njWX44GIkLkSoV8dRLRE9Y="
+        },
+        "Академик Марғұлан көшесі":{
+            year:"1990",
+            history:"Названа в честь археолога, историка и этнографа Алькея Маргулана.",
+            description:"Улица в жилом районе.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532731866_708408996_23_1682317781&size=500%2C240&azimuth=-3.3&tilt=10&api_key=maps&signature=uYDAqmE9PKgJWn7Xk2n_kZZ24ZEKdWGPWqangq-pC7c="
+        },
+        "Қабдеш Нұркин көшесі":{
+            year:"2019",
+            history:"Названа в честь казахского поэта Қабдеш Нұркина.",
+            description:"Раньше называлась: улица Похомова.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532845689_708677787_23_1682324638&size=500%2C240&azimuth=99.6&tilt=10&api_key=maps&signature=rfoIrcFeETJB_zuBrQO40Nk6sqmjzEoZnwT1vA3IycE="
+        },
+        "Академик Бектұров көшесі":{
+            year:"1927",
+            history:"Названа в честь учёного-химика Абикена Бектурова.",
+            description:"Раньше называлась: улица Короленко.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532747268_708271394_23_1682397406&size=500%2C240&azimuth=54&tilt=10&api_key=maps&signature=i5zqEO65CjvWlY2Cg8pWsUuRTo5BtfhIFUhdex0rZck="
+        },
+        "улица Циолковского":{
+            year:"1960",
+            history:"Названа в честь основоположника космонавтики Константина Циолковского.",
+            description:"Улица в советский период.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1533107216_708510760_23_1682323268&size=500%2C240&azimuth=-82.5&tilt=1&api_key=maps&signature=qMuKxtqRJ4_R_te9KxwOS1XpsCHdjSdTk-xpSdSgl54="
+        },
+        "Қайырбаев көшесі":{
+            year:"1994",
+            history:"Названа в честь Героя Советского Союза Махмета Кайырбаева.",
+            description:"Улица в жилой части города.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532793004_708367725_23_1682398254&size=500%2C240&azimuth=15.6&tilt=10&api_key=maps&signature=JUyJism-gEjimO5tCLQDbPjW6YnGKQpIMUvZY3TiBZA="
+        },
+        "Малая Объездная улица":{
+            year:"XXI",
+            history:"Объездная дорога для разгрузки движения транспорта.",
+            description:"Дорога на периферии города.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532987053_708387568_23_1682587090&size=500%2C240&azimuth=-108.9&tilt=10&api_key=maps&signature=gjRVWOVlYuBkiyFteaG1Kkb_lTkoHvJcO1Sn2Y0WeVg="
+        },
+        "улица Якова Геринга":{
+            year:"2007",
+            history:"Названа в честь Героя Социалистического Труда.",
+            description:"Длинная улица около 3,7 км. Раньше называлась: улица Энгельса.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1533061916_708278740_23_1682414248&size=500%2C240&azimuth=93.9&tilt=1&api_key=maps&signature=CetEsE7kIptN2cJJmC9tqbgrA3m7rd7NlH2j89AmkPQ="
+        },
+        "улица Административный городок":{
+            year:"1960",
+            history:"В этом районе размещались административные здания города.",
+            description:"Органы управления и ведомственные организации.",
+            image:"https://avatars.mds.yandex.net/get-altay/13054604/2a0000019095b2a6c641af9222d53c00cc50/orig"
+        },
+        "улица Исы Байзакова":{
+            year:"1900–1946",
+            history:"Названа в честь казахского поэта-акына Исы Байзакова.",
+            description:"Ранее называлась улицей Свердлова.",
+            image:"https://core-pht-proxy.maps.yandex.ru/v1/photos/download?photo_id=5KMThfgeE7cdzjRVip3u5A&image_size=M"
+        },
+        "Московская улица":{
+            year:"XX век",
+            history:"Улица в жилом районе.",
+            description:"Городская улица с жилыми домами.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532960132_708285015_23_1682414429&size=500%2C240&azimuth=-1.9&tilt=10&api_key=maps&signature=3dUfRka8kg9bpL_CFbIbNw-TT_YJp3oAo8R1NTzEhaI="
+        },
+        "улица Ткачева":{
+            year:"1980",
+            history:"Названа в честь героя труда или войны.",
+            description:"Ранее называлась улицей Декабристов.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532759455_708691229_23_1682500903&size=500%2C240&azimuth=126.5&tilt=10&api_key=maps&signature=-s2RNb-W4lirZveXHY8AduCY3rdRGYV2xpGSCHVH7lM="
+        },
+        "Муялдинская улица":{
+            year:"2015",
+            history:"Названа по географическому принципу.",
+            description:"Раньше называлась: улица Красных Борцов.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1533169547_708273009_23_1682392770&size=500%2C240&azimuth=74.4&tilt=1&api_key=maps&signature=Jlx4YmlyVHPG9O396mLVqRi-CbaBCUlzHD-lb4mOY9E="
+        },
+        "Кокчетавская улица":{
+            year:"1827",
+            history:"Названа в честь города Кокшетау (Кокчетав).",
+            description:"Улица в жилом районе.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532951440_708676494_23_1682484435&size=500%2C240&azimuth=91.7&tilt=1&api_key=maps&signature=afQEJjWVeMadWhsqPeo-CetwroUgPpYz0h0oR9YyXIE="
+        },
+        "Бескарагайская улица":{
+            year:"1870",
+            history:"Названа в честь населённого пункта Бескарагай.",
+            description:"Улица в жилом районе.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532976136_708630738_23_1682479851&size=500%2C240&azimuth=91.3&tilt=10&api_key=maps&signature=6WFltiQZjl3CDw5ZzmMjL9iAJaecUnwo1QWn5UHyZ3Q="
+        },
+        "Сливовая":{
+            year:"2000",
+            history:"Названа по природно-растительной тематике.",
+            description:"Улица в частном секторе.",
+            image:"https://krisha-photos.kcdn.online/webp/bf/bf0120f3-a47e-44d1-87b3-0dac56904e5f/8-400x300.jpg"
+        },
+        "улица Облепиховая":{
+            year:"2000",
+            history:"Названа по природной тематике.",
+            description:"Улица в жилом секторе.",
+            image:"https://iapn.kz/upload/medialibrary/7c4/7c4af95d10f83649dd412488342a7a0a.jpg"
+        },
+        "улица Чернышевского":{
+            year:"1984",
+            history:"Названа в честь русского писателя Николая Чернышевского.",
+            description:"Старая улица города.",
+            image:"https://avatars.mds.yandex.net/get-altay/9428388/2a00000188be0de20a4be7bedccea17ca411/L_height"
+        },
+        "улица Елгина":{
+	        year:"1965",
+	        history:"Мещанская слобода : Район заселялся мещанами и ремесленниками, застройка была исключительно деревянной и саманной",
+	        discription:"Жилая улица с единственной частной застройкой в ​​восточной части города",
+	        image:"https://avatars.mds.yandex.net/get-altay/5598654/2a0000017df1c1c2b101df6e541e0e485bbc/L_height"
+        },
+        "улица Потанина":{
+	        year:"1965",
+	        history:"Улица в Павлодаре назван в честь Григория Николаевича Потанина, выдающегося исследователя Центральной Азии.",
+	        discription:" Улица пролегает параллельно крупным транспортным артериям этого района, таким как улица Сураганова и улица Химкомбинатовская",
+	        image:"https://avatars.mds.yandex.net/get-altay/5298780/2a0000018f985f1287e56efb58c3567d6449/L_height"
+	    },
+        "улица Садовая":{
+	        year:"1980",
+	        history:"Свое название получило именно из-за того, что выходил в городской сад ",
+	        discription:"До 1980-х годов это был уютный переулок с частными домиками и огородами, который позже был практически полностью застроен многоэтажками со стороны улиц Лермонтова и Советов (ныне Академика Маргулана) . Остатки переулка сохранились в южной части города между улицами Достоевского и Горького",
+	        image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532773682_708593815_23_1682490952&size=500%2C240&azimuth=-51.481908513648776&tilt=1&api_key=maps&signature=EBuHsoy-qfAYeA25AIxjHK44NlIKcIo5DRoTzJB5huU="
+	    },
+        "Набережная көшесі":{
+            year:"1995",
+            history:"Улица Набережная расположена вдоль реки Иртыш. Сформировалась по мере развития городской набережной и благоустройства прибрежной территории Павлодара. Со временем стала популярным местом для прогулок и отдыха жителей.",
+            description:"Улица вдоль набережной с зонами отдыха, пешеходными дорожками и видом на реку.",
+            image:"https://kaztag.kz/upload/resize_cache/iblock/8f9/881_500_1/8f9523a8d51d089d851e2afd80df1d3d.png"
+        },
+        "улица Казахстанской Правды":{
+            year:"2005",
+            history:"Улица названа в честь газеты Казахстанская правда. Название появилось в советский период, когда улицы часто называли в честь печатных изданий и общественно-политических символов.",
+            description:"Городская улица с жилыми домами и объектами инфраструктуры."
+        },
+        "Генерал Дүйсенов көшесі":{
+            year:"1994",
+            history:"Названа в честь генерала, участника Великой Отечественной войны Садыка Дюсенова. До 1994 года называлась улицей 25 Октября.",
+            description:"Важная транспортная артерия города, проходит через центральную часть Павлодара.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532807971_708165670_23_1682655567&size=500%2C240&azimuth=178.6&tilt=10&api_key=maps&signature=sg23P5hGYK46blXgmAqDwfKO8_49M7bcOCZvNjmNw70="
+        },
+        "Абай көшесі":{
+            year:"1945",
+            history:"Названа в честь казахского поэта, композитора и просветителя Абая Кунанбаева. До 1945 года называлась улицей 10 Мая.",
+            description:"Центральная улица в одном из районов города. Абай — один из самых значимых деятелей казахской культуры.",
+            image:"https://avatars.mds.yandex.net/get-altay/9428388/2a00000188be0de20a4be7bedccea17ca411/L_height"
+        },
+        "Исиналиев":{
+            year:"1994",
+            history:"Названа в честь известного павлодарского историка и краеведа Михаила Исиналиева. До 1994 года называлась улицей 40 лет ВЛКСМ.",
+            description:"Улица в жилом районе города, проходит рядом с набережной реки Иртыш.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532757057_708729320_23_1682499916&size=500%2C240&azimuth=-80.3&tilt=10&api_key=maps&signature=QUAZB8tZSF3-wfGtNtXqXuYXAik8NcPMega4n-E9QG0="
+        },
+        "Достоевского":{
+            year:"1950",
+            history:"Названа в честь русского писателя Фёдора Михайловича Достоевского. Ранее улица входила в состав исторического центра города.",
+            description:"Одна из старых улиц Павлодара, названная в честь автора романа 'Преступление и наказание'.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532780107_708518461_23_1682489276&size=500%2C240&azimuth=40.7&tilt=1&api_key=maps&signature=eMuj2EHMbLBNeKlo3tydIqVDDYjKio71xrhVwuDF8m4="
+        },
+        "Осипенко":{
+            year:"1950",
+            history:"Названа в честь Героя Советского Союза, лётчицы Полины Денисовны Осипенко. Возникла в 1950-х годах при строительстве посёлка Алюминстрой.",
+            description:"Улица в жилом посёлке Алюминстрой на восточной окраине города.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532916317_708473875_23_1682136187&size=500%2C240&azimuth=12.7&tilt=10&api_key=maps&signature=LDgmYZTIpk3Os0dByQxrSQr5_FpH3u5EiOk8Of77lMw="
+        },
+        "Расковой":{
+            year:"1950",
+            history:"Названа в честь Героя Советского Союза, летчицы-штурмана Марины Михайловны Расковой. Возникла в 1950-х годах при строительстве посёлка Алюминстрой.",
+            description:"Улица в жилом посёлке Алюминстрой. Марина Раскова — одна из основательниц женского авиационного полка 'Ночные ведьмы'.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1533006261_708668367_23_1682486839&size=500%2C240&azimuth=-7&tilt=1&api_key=maps&signature=judK9b4nip6DqLKRthxr5njWX44GIkLkSoV8dRLRE9Y="
+        },
+        "Чайковского":{
+            year:"1950",
+            history:"Названа в честь русского композитора Петра Ильича Чайковского. Возникла в 1950-х годах при строительстве посёлка Алюминстрой.",
+            description:"Улица в жилом посёлке Алюминстрой. Чайковский — один из самых известных композиторов в мировой истории.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1533107216_708510760_23_1682323268&size=500%2C240&azimuth=-82.5&tilt=1&api_key=maps&signature=qMuKxtqRJ4_R_te9KxwOS1XpsCHdjSdTk-xpSdSgl54="
+        },
+        "Металлургов":{
+            year:"1980",
+            history:"Названа в честь профессии металлургов, работавших на Павлодарском алюминиевом заводе. Образовалась в конце 1980-х годов.",
+            description:"Улица в посёлке Горзеленстрой. Название связано с промышленным профилем города.",
+            image:"https://static-pano.maps.yandex.ru/v1/?panoid=1532597123_708129505_23_1682153485&size=500%2C240&azimuth=41.9&tilt=10&api_key=maps&signature=KQpF2H8sFpm6pgCFqmc7Hssx9ElbUMOqr2rU6nNYBS4="
+        }
+}
+    // Достопримечательности Павлодара
+    var attractions = [
+        {
+            name: "Мечеть имени Машхура Жусупа",
+            lat: 52.286437,
+            lng: 76.962165,
+            type: "mosque",
+            description: "Одна из самых красивых мечетей Казахстана, построена в 2001 году. Высота с минаретами — 63 метра. Архитектура в форме восьмиконечной звезды с гармоничным сочетанием песочного и бирюзового цветов.",
+            address: "ул. Каирбаева, 107",
+            image: "https://avatars.mds.yandex.net/i?id=699c1a41e3ed5ab656df08771b7421f4_l-10850090-images-thumbs&n=13"
+        },
+        {
+            name: "Благовещенский Собор",
+            lat: 52.295843,
+            lng: 76.928236,
+            type: "church",
+            description: "Построен в 1999 году по образцу соборов Московского Кремля. Красный кирпич, семь куполов (символ семи таинств), девять колоколов (число ангельских чинов).",
+            address: "ул. Торайгырова, 1/5",
+            image: "https://upload.wikimedia.org/wikipedia/commons/7/7c/Blagoveschenskij_sobor_Pavlodar_001.JPG"
+        },
+        {
+            name: "Историко-краеведческий музей им. Г.Н. Потанина",
+            lat: 52.290373,
+            lng: 76.945532,
+            type: "museum",
+            description: "Основан в 1942 году. Более 72 тысяч экспонатов в восьми залах. Расположен в бывшем торговом доме купца Дерова (конец XIX века) — памятнике сибирского модерна.",
+            address: "ул. Астана, 149",
+            image: "https://museum.rusdeutsch.ru/fotos/95.png"
+        },
+        {
+            name: "Торговый дом купца Дерова",
+            lat: 52.277831,
+            lng: 76.939949,
+            type: "monument",
+            description: "Построен в конце XIX века архитектором П. Батовым. Самое роскошное здание Павлодара того времени. Имеет смотровую башню, восстановленную в 2012 году.",
+            address: "ул. Астана, 149",
+            image: "https://kazahstan.net/wp-content/uploads/2025/02/dom-kupca-derova-1.jpg"
+        },
+        {
+            name: "Драматический театр им. А.П. Чехова",
+            lat: 52.276547,
+            lng: 76.939310,
+            type: "monument",
+            description: "Открыт в ноябре 1945 года. За почти 80 лет работы поставлено свыше 600 пьес. Ставит классические произведения и работы современных авторов.",
+            address: "ул. Астана, 166",
+            image: "https://russian-theater.pro/assets/cache_image/upload/theaters/kaz-pavlodar_900x0_4c0.jpg"
+        },
+        {
+            name: "Набережная реки Иртыш",
+            lat: 52.293869,
+            lng: 76.931252,
+            type: "park",
+            description: "Самая протяжённая набережная в Казахстане (более 6 км). Оборудована скамейками, спортивными площадками, фонтанами. Летом проходят концерты.",
+            address: "набережная Иртыша",
+            image: "https://dynamic-media-cdn.tripadvisor.com/media/photo-o/13/4d/89/0f/caption.jpg?w=1200&h=-1&s=1"
+        },
+        {
+            name: "Обелиск Славы и Вечный огонь",
+            lat: 52.285737,
+            lng: 76.944972,
+            type: "monument",
+            description: "Возведён в 1974 году. Три стрелы высотой 24 метра символизируют единство народа, партии и армии. У подножия горит Вечный огонь.",
+            address: "площадь Победы",
+            image: "https://avatars.mds.yandex.net/get-altay/1903890/2a0000018aa2800b8925638493a2f1d79204/L_height"
+        },
+        {
+            name: "Дом купца Зайцева",
+            lat: 52.2809,
+            lng: 76.9427,
+            type: "museum",
+            description: "Памятник деревянного зодчества 1897 года. Резные ставни, круглые веранды, изразцовый камин. Сейчас — музей литературы и искусства им. Бухар Жырау.",
+            address: "ул. Академика Маргулана, 97",
+            image: "https://wildticketasia.com/uploads/posts/2024-05/1714748465_zaitsev-merchant-house-pavlodar-9.jpg"
+        },
+        {
+            name: "Дворец культуры им. Естая",
+            lat: 52.2855,
+            lng: 76.9413,
+            type: "monument",
+            description: "Назван в честь народного певца и композитора Естая Беркимбайулы. Два зрительных зала, регулярно проводятся семинары и фестивали.",
+            address: "площадь Конституции",
+            image: "https://avatars.mds.yandex.net/get-altay/10933525/2a0000018a06b56fd4dddbce334650dfd484/L_height"
+        },
+        {
+            name: "Ледовый дворец 'Астана'",
+            lat: 52.2866,
+            lng: 76.9545,
+            type: "monument",
+            description: "Открыт в 2003 году. Арена рассчитана на 250 человек. Проводятся соревнования по хоккею и фигурному катанию международного уровня.",
+            address: "ул. Каирбаева, 87",
+            image: "https://avatars.mds.yandex.net/get-altay/13851722/2a00000194fa26f79cc50156cfa8d6aa2116/orig"
+        },
+        {
+            name: "Дом-музей Д.П. Багаева",
+            lat: 52.2723,
+            lng: 76.9399,
+            type: "museum",
+            description: "Памятник русского деревянного зодчества со стеклянным потолком. Экспонаты: личные вещи Багаева, фотоаппаратура начала XX века, фотографии истории края.",
+            address: "ул. Астана, 200",
+            image: "https://pavlkraimuz.kz/images/filials/bagaeva/bag2.JPG"
+        },
+        {
+            name: "Музей 'Ertis'",
+            lat: 52.2791,
+            lng: 76.9357,
+            type: "museum",
+            description: "Палеонтологический музей у набережной. Экспозиция охватывает миллионы лет: муляж мамонта, находки из 'Гусиного перелёта', реконструкции жилищ древних людей.",
+            address: "ул. Михаила Исиналиева, 2",
+            image: "https://pavlkraimuz.kz/images/filials/ertis/ertis-02.jpg"
+        },
+        {
+            name: "Памятник жертвам голодомора",
+            lat: 52.2854,
+            lng: 76.9452,
+            type: "monument",
+            description: "Открыт в 2012 году. Изображает умершую женщину и плачущего ребёнка. За фигурами — разбитый шанырак (купол юрты). Установлен у старого мусульманского кладбища.",
+            address: "ул. Баян батыра",
+            image: "https://avatars.mds.yandex.net/get-altay/9749133/2a00000188fd3991d9813a338b4dda7ddfe2/L_height"
+        },
+        {
+            name: "Дом-музей Шафера",
+            lat: 52.2796,
+            lng: 76.9387,
+            type: "museum",
+            description: "Единственный в Казахстане музей грампластинок. Коллекция Наумa Шафера — 25 тысяч виниловых раритетов со всего света.",
+            address: "ул. Академика Бектурова, 19",
+            image: "https://shafer.pavlodar.com/img/house1.jpg"
+        },
+        {
+            name: "Парк 'Горсад'",
+            lat: 52.2818,
+            lng: 76.9329,
+            type: "park",
+            description: "Городской парк культуры и отдыха. Аттракционы для детей и взрослых, летом — концерты на открытой сцене.",
+            address: "пересечение ул. Естая и Генерала Дюсенова",
+            image: "https://avatars.mds.yandex.net/get-altay/4447467/2a0000017a09facd20a92526ca48ae8549cd/L_height"
+        },
+        {
+            name: "Художественный музей",
+            lat: 52.3023,
+            lng: 76.9405,
+            type: "museum",
+            description: "Открыт в 1965 году. Работы казахстанских художников, русский авангард 1920-1950-х годов, подарки от Третьяковской галереи.",
+            address: "ул. Торайгырова, 44/1",
+            image: "https://static-pano.maps.yandex.ru/v1/?panoid=1532705464_708277893_23_1682151571&size=500%2C240&azimuth=1.9&tilt=10&api_key=maps&signature=6VesqF77a4rRES1IkjgFVVxs8qVNUHoSEQEi3jPoIYs="
+        },
+        {
+            name: "Памятник природы 'Гусиный перелёт'",
+            lat: 52.2949,
+            lng: 76.9256,
+            type: "park",
+            description: "Палеонтологический памятник на набережной. Обнаружены кости носорога, саблезубого тигра, жирафа, гиены. Разбит парк со скульптурами доисторических животных.",
+            address: "набережная Иртыша",
+            image: "https://avatars.mds.yandex.net/get-altay/10247017/2a000001901ef4888c63711cf46d7da832ee/L_height"
+        }
+    ];
+
+    // элементы панели
+    var streetName=document.getElementById("streetName");
+    var streetContent=document.getElementById("streetContent");
+    var streetImage=document.getElementById("streetImage");
+
+    // Функция поиска улиц из базы данных
+    function searchStreet() {
+        var input = document.getElementById("streetSearchInput");
+        var query = input.value.toLowerCase().trim();
+        var resultsDiv = document.getElementById("searchResults");
+        
+        if (!query) {
+            resultsDiv.style.display = "none";
+            return;
+        }
+
+        var matches = [];
+        
+        // Поиск по улицам
+        for (let key in streetInfo) {
+            if (key.toLowerCase().includes(query)) {
+                matches.push({ type: 'street', name: key, data: streetInfo[key] });
+            }
+        }
+        
+        // Поиск по достопримечательностям
+        attractions.forEach(function(attr) {
+            if (attr.name.toLowerCase().includes(query)) {
+                matches.push({ type: 'attraction', name: attr.name, data: attr });
+            }
+        });
+
+        // Отображение результатов
+        resultsDiv.innerHTML = "";
+        
+        if (matches.length === 0) {
+            resultsDiv.innerHTML = '<div class="no-results">Ничего не найдено</div>';
+        } else {
+            matches.forEach(function(match) {
+                var div = document.createElement("div");
+                div.className = "search-result-item";
+                div.innerHTML = match.type === 'street' ? 
+                    "📍 " + match.name + " <small>(улица)</small>" : 
+                    "⭐ " + match.name + " <small>(достопримечательность)</small>";
+                
+                div.onclick = function() {
+                    if (match.type === 'street') {
+                        // Для улиц показываем информацию
+                        streetName.innerText = match.name;
+                        if (match.data.image) {
+                            streetImage.src = match.data.image;
+                            streetImage.style.display = "block";
+                        }
+                        streetContent.innerHTML = `
+                            <b>Год:</b> ${match.data.year}<br><br>
+                            <b>История:</b><br>
+                            ${match.data.history}<br><br>
+                            ${match.data.description}
+                        `;
+                    } else {
+                        // Для достопримечательностей центрируем карту и показываем информацию
+                        map.setView([match.data.lat, match.data.lng], 16);
+                        streetName.innerHTML = '<span style="color:#e74c3c;">★</span> ' + match.data.name;
+                        if (match.data.image) {
+                            streetImage.src = match.data.image;
+                            streetImage.style.display = "block";
+                        }
+                        streetContent.innerHTML = `
+                            <b>Адрес:</b> ${match.data.address}<br><br>
+                            ${match.data.description}
+                        `;
+                    }
+                    resultsDiv.style.display = "none";
+                    input.value = match.name;
+                };
+                resultsDiv.appendChild(div);
+            });
+        }
+        
+        resultsDiv.style.display = "block";
+    }
+
+    // Поиск при нажатии Enter
+    document.getElementById("streetSearchInput").addEventListener("keypress", function(e) {
+        if (e.key === "Enter") {
+            searchStreet();
+        }
+    });
+
+    // Скрыть результаты при клике вне поиска
+    document.addEventListener("click", function(e) {
+        var searchPanel = document.querySelector(".street-search-panel");
+        var resultsDiv = document.getElementById("searchResults");
+        if (!searchPanel.contains(e.target)) {
+            resultsDiv.style.display = "none";
+        }
+    });
+
+    // Добавление меток достопримечательностей
+    attractions.forEach(function(attr) {
+        var markerClass = 'custom-marker';
+        if(attr.type === 'museum') markerClass += ' museum-marker';
+        else if(attr.type === 'mosque') markerClass += ' mosque-marker';
+        else if(attr.type === 'church') markerClass += ' church-marker';
+        else if(attr.type === 'park') markerClass += ' park-marker';
+        else if(attr.type === 'monument') markerClass += ' monument-marker';
+
+        var icon = L.divIcon({
+            className: markerClass,
+            iconSize: [24, 24]
+        });
+
+        var marker = L.marker([attr.lat, attr.lng], {icon: icon}).addTo(map);
+        
+        marker.on('click', function() {
+            streetName.innerHTML = '<span style="color:#e74c3c;">★</span> ' + attr.name;
+            if(attr.image) {
+                streetImage.src = attr.image;
+                streetImage.style.display = "block";
+            }
+            streetContent.innerHTML = `
+                <b>Адрес:</b> ${attr.address}<br><br>
+                ${attr.description}
+            `;
+        });
+    });
+
+    // границы города
+    var bbox="52.22,76.88,52.35,77.05";
+    
+    var query=`
+    [out:json][timeout:25];
+    (
+    way["highway"](${bbox});
+    );
+    out geom;
+    `;
+
+    var url="https://overpass-api.de/api/interpreter?data="+encodeURIComponent(query);
+
+    // загрузка улиц
+    fetch(url)
+        .then(res=>res.json())
+        .then(data=>{
+
+            data.elements.forEach(el=>{
+
+                if(!el.geometry) return;
+
+                var coords=el.geometry.map(p=>[p.lat,p.lon]);
+
+                var street=L.polyline(coords,{
+                    color:"#888",
+                    weight:2,
+                    opacity:0.5
+                }).addTo(map);
+
+                var name="Без названия";
+
+                if(el.tags && el.tags.name){
+                    name=el.tags.name;
+                }
+
+                street.on("mouseover",function(){
+                    street.setStyle({
+                        color:"#3b82f6",
+                        weight:4,
+                        opacity:1
+                    });
+                });
+
+                street.on("mouseout",function(){
+                    street.setStyle({
+                        color:"#888",
+                        weight:2,
+                        opacity:0.5
+                    });
+                });
+
+                street.on("click",function(){
+                    streetName.innerText=name;
+
+                    var info=null;
+
+                    for(let key in streetInfo){
+                        if(name.toLowerCase().includes(key.toLowerCase())){
+                            info=streetInfo[key];
+                            break;
+                        }
+                    }
+
+                    if(info){
+                        if(info.image){
+                            streetImage.src=info.image;
+                            streetImage.style.display="block";
+                        }else{
+                            streetImage.style.display="none";
+                        }
+
+                        streetContent.innerHTML=`<b>Год:</b> ${info.year}<br><br><b>История:</b><br>${info.history}<br><br>${info.description}`;
+                    }else{
+                        streetImage.style.display="none";
+                        streetContent.innerHTML="Информация об этой улице пока не добавлена.";
+                    }
+                });
+            });
+        });
+</script>
+
+</body>
+</html>
